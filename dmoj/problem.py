@@ -18,6 +18,9 @@ from dmoj.utils.module import load_module_from_file
 
 DEFAULT_TEST_CASE_INPUT_PATTERN = r'^(?=.*?\.in|in).*?(?:(?:^|\W)(?P<batch>\d+)[^\d\s]+)?(?P<case>\d+)[^\d\s]*$'
 DEFAULT_TEST_CASE_OUTPUT_PATTERN = r'^(?=.*?\.out|out).*?(?:(?:^|\W)(?P<batch>\d+)[^\d\s]+)?(?P<case>\d+)[^\d\s]*$'
+#todo: figure out pretest regex
+DEFAULT_PRETEST_CASE_INPUT_PATTERN = r'^(?=.*?\.in|in).*?(?:(?:^|\W)(?P<batch>\d+)[^\d\s]+)?(?P<case>\d+)[^\d\s]*$'
+DEFAULT_PRETEST_CASE_OUTPUT_PATTERN = r'^(?=.*?\.out|out).*?(?:(?:^|\W)(?P<batch>\d+)[^\d\s]+)?(?P<case>\d+)[^\d\s]*$'
 
 
 class Problem:
@@ -41,6 +44,7 @@ class Problem:
 
         if not self._resolve_test_cases():
             raise InvalidInitException('No test cases? What am I judging?')
+        self._resolve_test_cases("pretest_test_cases")
 
     def _match_test_cases(self, filenames, input_case_pattern, output_case_pattern, case_points):
         def try_match_int(match, group):
@@ -117,8 +121,8 @@ class Problem:
             raise InvalidInitException('can only use test case format specifiers if `archive` is set')
         return self.problem_data.archive.namelist()
 
-    def _resolve_test_cases(self):
-        test_cases = self.config.test_cases
+    def _resolve_test_cases(self, mode = "test_cases"):
+        test_cases = self.config[mode]
 
         # We support several ways for specifying cases. The first is a list of cases, and requires no extra work.
         if test_cases is not None and isinstance(test_cases.unwrap(), list):
@@ -129,15 +133,23 @@ class Problem:
                 return default
             return test_cases[name] or default
 
-        # If the `test_cases` node is None, we try to guess the testcase name format.
-        self.config['test_cases'] = self._match_test_cases(
+        # If the test cases node is None, we try to guess the testcase name format.
+        if mode == 'test_cases':
+            default_input_pattern = DEFAULT_TEST_CASE_INPUT_PATTERN
+            default_output_pattern = DEFAULT_TEST_CASE_OUTPUT_PATTERN
+        elif mode == 'pretest_test_cases':
+            default_input_pattern = DEFAULT_PRETEST_CASE_INPUT_PATTERN
+            default_output_pattern = DEFAULT_PRETEST_CASE_OUTPUT_PATTERN
+        else:
+            raise ValueError('Invalid mode: expected "test_cases" or "pretest_test_cases"')
+        self.config[mode] = self._match_test_cases(
             self._problem_file_list(),
-            re.compile(get_with_default('input_format', DEFAULT_TEST_CASE_INPUT_PATTERN), re.IGNORECASE),
-            re.compile(get_with_default('output_format', DEFAULT_TEST_CASE_OUTPUT_PATTERN), re.IGNORECASE),
+            re.compile(get_with_default('input_format', default_input_pattern), re.IGNORECASE),
+            re.compile(get_with_default('output_format', default_output_pattern), re.IGNORECASE),
             iter(get_with_default('case_points', itertools.repeat(self.config.points))),
         )
 
-        return self.config['test_cases']
+        return self.config[mode]
 
     def load_checker(self, name):
         if name in self._checkers:
